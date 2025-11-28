@@ -55,13 +55,19 @@ class Settings:
     # Voice Agent Configuration (Pipecat/Exotel)
     HOST: str = os.environ.get("HOST", "localhost")
     PORT: int = int(os.environ.get("PORT", 8000))
-    EXOTEL_ACCOUNT_SID: Optional[str] = os.environ.get("EXOTEL_ACCOUNT_SID")
-    EXOTEL_AUTH_TOKEN: Optional[str] = os.environ.get("EXOTEL_AUTH_TOKEN")
+    EXOTEL_ACCOUNT_SID: Optional[str] = os.environ.get("EXOTEL_SID")
+    EXOTEL_AUTH_TOKEN: Optional[str] = os.environ.get("EXOTEL_API_TOKEN")
+    EXOTEL_API_KEY: Optional[str] = os.environ.get("EXOTEL_API_KEY")
     EXOTEL_API_BASE: str = os.environ.get("EXOTEL_API_BASE", "https://api.exotel.com/v1")
     DEEPGRAM_API_KEY: Optional[str] = os.environ.get("DEEPGRAM_API_KEY")
     SARVAM_API_KEY: Optional[str] = os.environ.get("SARVAM_API_KEY")
     SARVAM_VOICE_ID: str = os.environ.get("SARVAM_VOICE_ID", "default_voice")
     WEBHOOK_URL: Optional[str] = os.environ.get("WEBHOOK_URL")
+
+    # Vobiz Configuration
+    VOBIZ_AUTH_ID: Optional[str] = os.environ.get("VOBIZ_AUTH_ID")
+    VOBIZ_AUTH_TOKEN: Optional[str] = os.environ.get("VOBIZ_AUTH_TOKEN")
+    VOBIZ_PHONE_NUMBER: Optional[str] = os.environ.get("VOBIZ_PHONE_NUMBER")
     
     def __init__(self):
         """Validate required settings on initialization."""

@@ -141,23 +141,30 @@ The system supports different Sentence Transformer models:
 
 ## API Endpoints
 
-### 1. Analyze Transcript
+### Core API Endpoints
+
+#### 1. Analyze Transcript
 
 **POST** `/analyze_transcript`
 
-Analyzes a Hindi patient transcript and returns a comprehensive clinical report.
+Analyzes a Hindi patient transcript and returns a comprehensive clinical report using the multi-agent supervisor workflow.
 
 **Request Body:**
 ```json
 {
   "userid": "patient_123",
-  "transcript": "मुझे पिछले तीन दिनों से बुखार हो रहा है...",
-  "location": "Delhi, India"  // Optional
+  "transcript": "मुझे पिछले तीन दिनों से बुखार हो रहा है। हल्की खांसी है और शरीर में दर्द हो रहा है।",
+  "location": "Delhi, India"
 }
 ```
 
+**Request Parameters:**
+- `userid` (string, required): Patient/user identifier
+- `transcript` (string, required): Hindi patient transcript text
+- `location` (string, optional): Patient location for local outbreak search/filters
+
 **Response:**
-Returns a structured JSON report (see [Response Format](#response-format) section).
+Returns a structured JSON report (see [Response Format](#response-format) section for full structure).
 
 **Example:**
 ```bash
@@ -165,31 +172,39 @@ curl -X POST "http://localhost:8000/analyze_transcript" \
   -H "Content-Type: application/json" \
   -d '{
     "userid": "patient_123",
-    "transcript": "मुझे पिछले तीन दिनों से बुखार हो रहा है। हल्की खांसी है और शरीर में दर्द हो रहा है।"
+    "transcript": "मुझे पिछले तीन दिनों से बुखार हो रहा है। हल्की खांसी है और शरीर में दर्द हो रहा है।",
+    "location": "Delhi, India"
   }'
 ```
 
-### 2. Upload PDF for RAG
+#### 2. Upload PDF for RAG
 
 **POST** `/upload_pdf`
 
-Uploads a PDF document to be processed and added to the RAG knowledge base.
+Uploads a PDF document to be processed and added to the RAG knowledge base. The PDF is chunked, embedded, and stored in LanceDB for semantic search.
 
 **Request:**
-- `file`: PDF file (multipart/form-data)
-- `source`: Source identifier (optional, default: "uploaded_pdf")
-- `chunk_size`: Words per chunk (optional, default: 1000)
-- `overlap`: Overlapping words between chunks (optional, default: 200)
+- Content-Type: `multipart/form-data`
+- `file` (file, required): PDF file to upload
+- `source` (string, optional): Source identifier for the document (default: "uploaded_pdf")
+- `chunk_size` (integer, optional): Number of words per chunk (default: from settings, typically 1000)
+- `overlap` (integer, optional): Number of overlapping words between chunks (default: from settings, typically 200)
 
 **Response:**
 ```json
 {
   "success": true,
   "message": "Successfully processed PDF: guidelines.pdf. Added 45 chunks to RAG database.",
-  "document_id": "uuid-here",
+  "document_id": "550e8400-e29b-41d4-a716-446655440000",
   "chunks_added": 45
 }
 ```
+
+**Response Fields:**
+- `success` (boolean): Whether the upload was successful
+- `message` (string): Status message with details
+- `document_id` (string): Unique identifier for the uploaded document
+- `chunks_added` (integer): Number of text chunks added to the database
 
 **Example:**
 ```bash
@@ -198,6 +213,260 @@ curl -X POST "http://localhost:8000/upload_pdf" \
   -F "source=ICMR_2023" \
   -F "chunk_size=1000" \
   -F "overlap=200"
+```
+
+### Voice Agent Endpoints
+
+#### 3. Inbound Call Webhook
+
+**POST** `/voice/exotel/inbound`
+
+Handles inbound call webhook from Exotel. Creates a new call session and returns WebSocket connection details.
+
+**Request Body:**
+```json
+{
+  "From": "+919876543210",
+  "To": "+911234567890",
+  "CallSid": "call_12345",
+  "Direction": "inbound"
+}
+```
+
+**Request Parameters:**
+- `From` (string): Caller phone number
+- `To` (string): Called phone number
+- `CallSid` (string, optional): Exotel call ID
+- Additional Exotel webhook parameters may be included
+
+**Response:**
+```json
+{
+  "stream_id": "550e8400-e29b-41d4-a716-446655440000",
+  "call_id": "call_12345",
+  "websocket_url": "wss://your-domain.com/ws/exotel/550e8400-e29b-41d4-a716-446655440000?call_id=call_12345"
+}
+```
+
+**Response Fields:**
+- `stream_id` (string): Unique stream identifier for this call
+- `call_id` (string): Call identifier
+- `websocket_url` (string): WebSocket URL for Exotel to connect to
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/voice/exotel/inbound" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "From": "+919876543210",
+    "To": "+911234567890",
+    "CallSid": "call_12345"
+  }'
+```
+
+#### 4. Initiate Outbound Call
+
+**POST** `/voice/exotel/outbound`
+
+Initiates an outbound call through Exotel. Creates a call session and triggers the call.
+
+**Request Body:**
+```json
+{
+  "from": "+911234567890",
+  "to": "+919876543210"
+}
+```
+
+**Request Parameters:**
+- `from` (string, required): Phone number to call from (Exotel number)
+- `to` (string, required): Phone number to call to
+
+**Response:**
+```json
+{
+  "stream_id": "550e8400-e29b-41d4-a716-446655440000",
+  "call_id": "550e8400-e29b-41d4-a716-446655440001",
+  "websocket_url": "wss://your-domain.com/ws/exotel/550e8400-e29b-41d4-a716-446655440000?call_id=550e8400-e29b-41d4-a716-446655440001",
+  "exotel_response": {
+    "Call": {
+      "Sid": "exotel_call_id",
+      "Status": "queued"
+    }
+  }
+}
+```
+
+**Response Fields:**
+- `stream_id` (string): Unique stream identifier for this call
+- `call_id` (string): Generated call identifier
+- `websocket_url` (string): WebSocket URL for Exotel to connect to
+- `exotel_response` (object): Response from Exotel API
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/voice/exotel/outbound" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "from": "+911234567890",
+    "to": "+919876543210"
+  }'
+```
+
+#### 5. List Active Calls
+
+**GET** `/voice/calls`
+
+Returns a list of all active/initiated calls for debugging purposes.
+
+**Request:** None (query parameters not required)
+
+**Response:**
+```json
+{
+  "stream_id_1": {
+    "call_id": "call_12345",
+    "from": "+919876543210",
+    "to": "+911234567890",
+    "direction": "inbound",
+    "websocket_url": "wss://your-domain.com/ws/exotel/stream_id_1?call_id=call_12345",
+    "status": "active"
+  },
+  "stream_id_2": {
+    "call_id": "call_67890",
+    "from": "+911234567890",
+    "to": "+919876543210",
+    "direction": "outbound",
+    "websocket_url": "wss://your-domain.com/ws/exotel/stream_id_2?call_id=call_67890",
+    "status": "initiated"
+  }
+}
+```
+
+**Example:**
+```bash
+curl -X GET "http://localhost:8000/voice/calls"
+```
+
+#### 6. WebSocket Endpoint
+
+**WebSocket** `/ws/exotel/{stream_id}`
+
+WebSocket endpoint for real-time voice communication with Exotel. This endpoint handles bidirectional audio streaming for voice calls.
+
+**Path Parameters:**
+- `stream_id` (string, required): Stream identifier from the inbound/outbound call endpoints
+
+**Query Parameters:**
+- `call_id` (string, optional): Call identifier for tracking
+
+**Connection:**
+- Protocol: WebSocket (WSS for production)
+- Audio Format: Linear16 PCM, 8000 Hz sample rate
+- Serialization: Exotel frame format
+
+**Example:**
+```javascript
+const ws = new WebSocket('wss://your-domain.com/ws/exotel/550e8400-e29b-41d4-a716-446655440000?call_id=call_12345');
+```
+
+### RAG Endpoints (Voice Router)
+
+#### 7. Upload PDF to RAG (Voice Router)
+
+**POST** `/voice/rag/upload-pdf`
+
+Uploads a PDF file to the RAG knowledge base (alternative endpoint under voice router).
+
+**Request:**
+- Content-Type: `multipart/form-data`
+- `file` (file, required): PDF file to upload
+- `metadata` (string, optional): JSON string with additional metadata
+
+**Response:**
+```json
+{
+  "status": "success",
+  "doc_id": "550e8400-e29b-41d4-a716-446655440000",
+  "filename": "clinical_guidelines.pdf",
+  "message": "PDF 'clinical_guidelines.pdf' has been added to the knowledge base"
+}
+```
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/voice/rag/upload-pdf" \
+  -F "file=@clinical_guidelines.pdf" \
+  -F 'metadata={"source": "ICMR", "year": 2023}'
+```
+
+#### 8. Add Text Document to RAG
+
+**POST** `/voice/rag/add-text`
+
+Adds a text document directly to the RAG knowledge base without PDF processing.
+
+**Request Body:**
+- Content-Type: `application/x-www-form-urlencoded` or `multipart/form-data`
+- `text` (string, required): Text content to add
+- `source` (string, required): Source identifier for the document
+- `metadata` (string, optional): JSON string with additional metadata
+
+**Response:**
+```json
+{
+  "status": "success",
+  "doc_id": "550e8400-e29b-41d4-a716-446655440000",
+  "source": "clinical_protocol_2023",
+  "message": "Document 'clinical_protocol_2023' has been added to the knowledge base"
+}
+```
+
+**Example:**
+```bash
+curl -X POST "http://localhost:8000/voice/rag/add-text" \
+  -F "text=This is a clinical guideline for treating fever..." \
+  -F "source=clinical_protocol_2023" \
+  -F 'metadata={"category": "guidelines", "version": "1.0"}'
+```
+
+#### 9. Search RAG Knowledge Base
+
+**GET** `/voice/rag/search`
+
+Searches the RAG knowledge base using semantic search.
+
+**Query Parameters:**
+- `query` (string, required): Search query text
+- `top_k` (integer, optional): Number of results to return (default: 3)
+
+**Response:**
+```json
+{
+  "query": "fever treatment guidelines",
+  "results": [
+    {
+      "text": "For patients with fever lasting more than 3 days...",
+      "score": 0.85,
+      "source": "clinical_guidelines.pdf",
+      "metadata": {
+        "page": 5,
+        "chunk_id": "chunk_123"
+      }
+    }
+  ],
+  "count": 1
+}
+```
+
+**Response Fields:**
+- `query` (string): The search query used
+- `results` (array): Array of search results with text, score, source, and metadata
+- `count` (integer): Number of results returned
+
+**Example:**
+```bash
+curl -X GET "http://localhost:8000/voice/rag/search?query=fever%20treatment%20guidelines&top_k=5"
 ```
 
 ## Agent System

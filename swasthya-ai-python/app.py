@@ -27,6 +27,7 @@ from fastapi import FastAPI, WebSocket
 from config import settings
 from api import router
 from api.voice_routes import voice_router, ws_exotel_endpoint, close_global_session
+from api.vobiz_routes import vobiz_router, run_vobiz_pipeline, VOBIZ_CALLS
 
 
 @asynccontextmanager
@@ -48,9 +49,26 @@ app = FastAPI(
 # Include API routes
 app.include_router(router)
 app.include_router(voice_router)
+app.include_router(vobiz_router)
 
 # WebSocket endpoint at root level (Exotel calls this directly)
 @app.websocket("/ws/exotel/{stream_id}")
 async def ws_exotel_root(stream_id: str, websocket: WebSocket):
     """WebSocket endpoint for Exotel - root level for external access."""
     await ws_exotel_endpoint(stream_id, websocket)
+
+# WebSocket endpoint for Vobiz
+@app.websocket("/ws/vobiz/{stream_id}")
+async def ws_vobiz_root(stream_id: str, websocket: WebSocket):
+    """WebSocket endpoint for Vobiz."""
+    await websocket.accept()
+    
+    # Get call data if available
+    call_data = VOBIZ_CALLS.get(stream_id, {})
+    
+    try:
+        await run_vobiz_pipeline(websocket, stream_id, call_data)
+    except Exception as e:
+        # logger.error(f"Vobiz WebSocket error: {e}")
+        pass
+
